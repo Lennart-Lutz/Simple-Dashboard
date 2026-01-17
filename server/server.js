@@ -88,6 +88,23 @@ app.post("/api/dashboards", async (req, res) => {
   }
 });
 
+// DEMO ONLY
+
+app.get("/api/demo/latest", (req, res) => {
+  const key = String(req.query.param); // CO2 default
+
+  // Demo values by param
+  const now = Date.now();
+  const data = {
+    ts: now,
+    co2: Math.floor(400 + Math.random() * 1200),
+    temp: Math.round((18 + Math.random() * 6) * 10) / 10,
+    rh: Math.round((35 + Math.random() * 25) * 10) / 10,
+  };
+
+  res.json({ ts: now, key, value: data[key] ?? data.co2 });
+});
+
 // --- static ---
 app.use(express.static(path.join(ROOT_DIR, "public")));
 

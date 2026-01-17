@@ -15,6 +15,8 @@ export function createGrid({
   paddingBreakpoints = null,
 
   onChange = async () => { },
+  onRender = () => {},
+
 }) {
   if (!mountEl) throw new Error("createGrid: mountEl is required");
 
@@ -151,7 +153,7 @@ export function createGrid({
 
     const widget = document.createElement("div");
     widget.className = "widget";
-    widget.innerHTML = `<div class="hint">${it.id}</div>`;
+    widget.innerHTML = `<div class="widget-body"></div>`;
     el.appendChild(widget);
 
     // -------- pointerdown --------
@@ -266,6 +268,7 @@ export function createGrid({
     [...canvas.querySelectorAll(".grid-item")].forEach((n) => n.remove());
     renderOverlay();
     items.forEach((it) => canvas.appendChild(renderItem(it)));
+    onRender(getItems());
   }
 
   // ---------------- public API ----------------

@@ -11,6 +11,7 @@
 
   <link href="/style.css" rel="stylesheet" />
   <link href="/grid/grid.css" rel="stylesheet" />
+  <link href="/widgets/widgets.css" rel="stylesheet" />
 </head>
 
 <!-- Toast Container (Errors and general notifications) -->
@@ -82,11 +83,17 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
 
-        <div class="modal-body">
-          <!-- Placeholder for future options -->
-          <div class="text-muted small">
-            Options will come later (ECharts, type, data source, etc.).
+        <div class="modal-body"> <!-- Widget selection -->
+
+          <div class="mb-3">
+            <label class="form-label">Widget type</label>
+            <select id="addWidgetType" class="form-select">
+              <option value="value1x1">Value (1x1)</option>
+            </select>
           </div>
+
+          <div id="addWidgetOptions"></div>
+
         </div>
 
         <div class="modal-footer">

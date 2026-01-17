@@ -5,6 +5,9 @@ import { createEditTabModal } from "./ui/editTabModal.js";
 import { createAddWidgetModal } from "./ui/addWidgetModal.js";
 import { showError, showSuccess, showInfo } from "./ui/toast.js";
 
+import { createWidgetHost } from "./widgets/host.js";
+import { createDefaultItem } from "./widgets/registry.js";
+
 import { apiGetState, apiPutState, apiCreateDashboard } from "./api/dashboardsApi.js";
 import { getActiveDashboard, nextWidgetId, renameDashboard, setActiveDashboard } from "./state/dashboardsState.js";
 import { createTabsView } from "./ui/tabsView.js";
@@ -43,15 +46,43 @@ const grid = createGrid({
   onChange: async (items) => {
     const d = getActiveDashboard(state);
     if (!d) return;
-    d.items = items;
+
+    const nextState =
+      typeof structuredClone === "function"
+        ? structuredClone(state)
+        : JSON.parse(JSON.stringify(state));
+
+    const nd = nextState.dashboards.find((x) => x.id === nextState.activeId);
+    if (!nd) return;
+
+    nd.items = items;
+
     try {
-      await apiPutState(state);
+      await apiPutState(nextState);
+      state = nextState; // Commit only on success
     } catch (e) {
       showError("Failed to save dashboard layout. (Check connection?)");
-      throw e; // Needs to be thrown to allow a rollback
+      throw e;
     }
   },
+  onRender: () => syncWidgets(),
 });
+
+// ---------------- Widgets ----------------
+
+const widgetHost = createWidgetHost();
+
+function syncWidgets() {
+  const d = getActiveDashboard(state);
+  if (!d) return;
+  widgetHost.sync({
+    items: d.items || [],
+    rootEl: gridMount,
+    ctx: {
+      getDashboard: () => getActiveDashboard(state),
+    },
+  });
+}
 
 // ---------------- UI: Edit Tab Modal ----------------
 const editor = createEditTabModal({
@@ -108,9 +139,9 @@ const editor = createEditTabModal({
 // ---------------- UI: Add Widget Modal ----------------
 
 const addWidgetModal = createAddWidgetModal({
-  onAdd: async () => {
+  onAdd: async (payload) => {
     try {
-    await addWidget(); // Error handling in addWidget() (Modal close on success)
+      await addWidget(payload); // Error handling in addWidget() (Modal close on success)
     } catch (e) {
       showError("Widget could not be added.");
       throw e;
@@ -168,29 +199,39 @@ function renderActiveDashboard() {
   const d = getActiveDashboard(state);
   if (!d) return;
   grid.setItems(d.items || []);
+  syncWidgets(); // Load active widgets
 }
 
-async function addWidget() {
+async function addWidget({ type, title, endpoint, paramKey, paramValue, refreshMs }) {
   const d = getActiveDashboard(state);
   if (!d) return;
 
   d.items = d.items || [];
 
   const id = nextWidgetId(d);
+  const base = createDefaultItem(type);
   const item = {
     id,
     x: 0,
     y: 0,
-    w: 2,
-    h: 2,
-    // placeholder for future: type/config
-    // type: "empty",
-    // config: {}
+    w: base.w,
+    h: base.h,
+    type,
+    config: {
+      ...(base.config || {}),
+      title: title || base.config?.title,
+      endpoint: endpoint || base.config?.endpoint,
+      paramKey: paramKey || base.config?.paramKey,
+      paramValue: paramValue || base.config?.paramValue,
+      refreshMs: refreshMs != null ? refreshMs : base.config?.refreshMs,
+    },
   };
 
-  d.items.push(item);
-  await grid.addItem(item); // Triggers onChange
+  // strict add (persist first in grid.addItem)
+  await grid.addItem(item);
+  //d.items.push(item);
 }
+
 
 function toggleEdit() {
   const enabled = !grid.isEditing;
