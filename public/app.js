@@ -1,151 +1,192 @@
-import { createGrid } from "./grid/grid.js";
+// public/app.js
 
+import { createGrid } from "./grid/grid.js";
+import { createEditTabModal } from "./ui/editTabModal.js";
+import { showError, showSuccess, showInfo } from "./ui/toast.js";
+
+import { apiGetState, apiPutState, apiCreateDashboard } from "./api/dashboardsApi.js";
+import { getActiveDashboard, nextWidgetId, renameDashboard, setActiveDashboard } from "./state/dashboardsState.js";
+import { createTabsView } from "./ui/tabsView.js";
+
+// ---------------- DOM ----------------
 const elTabs = document.getElementById("dashTabs");
 const elBtnEdit = document.getElementById("btnEdit");
 const elBtnAdd = document.getElementById("btnAdd");
 const gridMount = document.getElementById("gridArea");
 
+// ---------------- State ----------------
 let state = null;
 
-// ---------------- API ----------------
-async function apiGetState() {
-  const r = await fetch("/api/dashboards");
-  if (!r.ok) throw new Error("GET /api/dashboards failed");
-  return await r.json();
-}
-async function apiPutState(nextState) {
-  const r = await fetch("/api/dashboards", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(nextState),
-  });
-  if (!r.ok) throw new Error("PUT /api/dashboards failed");
-}
-async function apiCreateDashboard(name = "New") {
-  const r = await fetch("/api/dashboards", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
-  });
-  if (!r.ok) throw new Error("POST /api/dashboards failed");
-  return await r.json();
-}
-
-// ---------------- Grid ----------------
-const grid = createGrid({
-  mountEl: gridMount,
-  cell: 80, // Zellen größe in Pixel (Quadrat)
+// ---------------- Config ----------------
+const GRID_CONFIG = {
+  cell: 80,
   cols: 40,
 
-  // Breakpoints: <= FullHD, <= 2k, sonst 4k+
   overlayBreakpoints: [
     { maxWidth: 1920, cols: 0, rows: 0 },
-    { maxWidth: 2560, cols: 25, rows: 13 }, // Getestet bei 2560x1440 Fullscreen
-    { maxWidth: 3840, cols: 0, rows: 0 }, 
+    { maxWidth: 2560, cols: 25, rows: 13 }, // tested 2560x1440 fullscreen
+    { maxWidth: 3840, cols: 0, rows: 0 },
   ],
 
   paddingBreakpoints: [
     { maxWidth: 1920, padding: { left: 0, right: 0, top: 0, bottom: 0 } },
-    { maxWidth: 2560, padding: { left: 12, right: 12, top: 0, bottom: 0 } }, // Getestet bei 2560x1440 Fullscreen
+    { maxWidth: 2560, padding: { left: 12, right: 12, top: 0, bottom: 0 } },
     { maxWidth: 3840, padding: { left: 0, right: 0, top: 0, bottom: 0 } },
   ],
+};
 
+// ---------------- Grid ----------------
+const grid = createGrid({
+  mountEl: gridMount,
+  ...GRID_CONFIG,
   onChange: async (items) => {
-    const d = state.dashboards.find((x) => x.id === state.activeId);
+    const d = getActiveDashboard(state);
     if (!d) return;
     d.items = items;
-    try { await apiPutState(state); } catch (e) { console.error(e); }
+    try {
+      await apiPutState(state);
+    } catch (e) {
+      showError("Failed to save dashboard layout.");
+      console.error(e);
+    }
   },
 });
 
-// ---------------- UI ----------------
-function renderTabs() {
-  elTabs.innerHTML = "";
+// ---------------- UI: Edit Modal ----------------
+const editor = createEditTabModal({
+  onSave: async ({ id, name }) => {
+    if (!renameDashboard(state, id, name)) return;
 
-  for (const d of state.dashboards) {
-    const li = document.createElement("li");
-    li.className = "nav-item";
-    li.role = "presentation";
+    try {
+      await apiPutState(state);
+      tabs.render();
+    } catch (e) {
+      showError("Dashboard renaming failed.");
+    }
+  },
 
-    const btn = document.createElement("button");
-    btn.className = "nav-link" + (d.id === state.activeId ? " active" : "");
-    btn.type = "button";
-    btn.textContent = d.name;
+  onDelete: async ({ id }) => {
+    const idx = state.dashboards.findIndex((d) => d.id === id);
+    if (idx === -1) return;
 
-    btn.addEventListener("click", async () => {
-      state.activeId = d.id;
-      renderTabs();
+    // Last remaining dashboard => reset instead of delete
+    if (state.dashboards.length === 1) {
+      const d = state.dashboards[0];
+      d.items = [];
+      d.name = "Main";
+
+      try {
+        await apiPutState(state);
+        tabs.render();
+        renderActiveDashboard();
+        showSuccess("Dashboard has been reseted.");
+      } catch {
+        showError("Dashboard could not be reset.");
+      }
+      return;
+    }
+
+    // Normal delete
+    state.dashboards.splice(idx, 1);
+
+    if (state.activeId === id) {
+      state.activeId = state.dashboards[0]?.id ?? null;
+    }
+
+    try {
+      await apiPutState(state);
+      tabs.render();
       renderActiveDashboard();
-      try { await apiPutState(state); } catch (e) { console.error(e); }
+      showSuccess("Dashboard deleted.");
+    } catch {
+      showError("Dashboard could not be deleted.");
+    }
+  },
+
+});
+
+// ---------------- UI: Tabs View ----------------
+const tabs = createTabsView({
+  elTabs,
+  getState: () => state,
+  isEditing: () => grid.isEditing,
+
+  onSelect: async (d) => {
+    setActiveDashboard(state, d.id);
+    tabs.render();
+    renderActiveDashboard();
+    try {
+      await apiPutState(state);
+    } catch (e) {
+      showError("Failed to switch dashboard.");
+      console.error(e);
+    }
+  },
+
+  onRename: (d) => {
+    editor.open({
+      id: d.id,
+      currentName: d.name,
+      validate: (next) => {
+        const exists = state.dashboards.some(
+          (x) => x.id !== d.id && (x.name || "").trim().toLowerCase() === next.trim().toLowerCase()
+        );
+        if (exists) return "This name is already in use.";
+        return null;
+      },
     });
+  },
 
-    li.appendChild(btn);
-    elTabs.appendChild(li);
-  }
-
-  const liPlus = document.createElement("li");
-  liPlus.className = "nav-item tab-plus";
-  const btnPlus = document.createElement("button");
-  btnPlus.className = "nav-link";
-  btnPlus.type = "button";
-  btnPlus.textContent = "+";
-  btnPlus.title = "Neues Dashboard";
-
-  btnPlus.addEventListener("click", async () => {
+  onCreateNew: async () => {
     try {
       await apiCreateDashboard("New");
       state = await apiGetState();
-      renderTabs();
+      tabs.render();
       renderActiveDashboard();
     } catch (e) {
+      showError("Failed to create new dashboard.");
       console.error(e);
     }
-  });
+  },
+});
 
-  liPlus.appendChild(btnPlus);
-  elTabs.appendChild(liPlus);
-}
-
+// ---------------- Actions ----------------
 function renderActiveDashboard() {
-  const d = state.dashboards.find((x) => x.id === state.activeId);
+  const d = getActiveDashboard(state);
   if (!d) return;
   grid.setItems(d.items || []);
 }
 
-function nextWidgetId(d) {
-  const used = new Set((d.items || []).map((x) => x.id));
-  let i = 1;
-  while (used.has(`w${i}`)) i++;
-  return `w${i}`;
+function addWidget() {
+  const d = getActiveDashboard(state);
+  if (!d) return;
+
+  d.items = d.items || [];
+  const id = nextWidgetId(d);
+
+  const item = { id, x: 0, y: 0, w: 2, h: 2 };
+  d.items.push(item);
+
+  grid.addItem(item);
 }
 
-async function addWidget() {
-  const d = state.dashboards.find((x) => x.id === state.activeId);
-  if (!d) return;
-  d.items = d.items || [];
-
-  const id = nextWidgetId(d);
-  const item = { id, x: 0, y: 0, w: 2, h: 2 }; // 160x160 px
-
-  d.items.push(item);
-  grid.addItem(item);
+function toggleEdit() {
+  const enabled = !grid.isEditing;
+  grid.setEditMode(enabled);
+  elBtnEdit.textContent = enabled ? "Done" : "Edit";
+  tabs.render();
 }
 
 // ---------------- Boot ----------------
 async function boot() {
   state = await apiGetState();
 
-  renderTabs();
+  tabs.render();
   renderActiveDashboard();
   grid.setEditMode(false);
 
-  elBtnEdit.addEventListener("click", () => {
-    const enabled = !grid.isEditing;
-    grid.setEditMode(enabled);
-    elBtnEdit.textContent = enabled ? "Done" : "Edit";
-  });
-
-  elBtnAdd.addEventListener("click", () => addWidget());
+  elBtnEdit.addEventListener("click", toggleEdit);
+  elBtnAdd.addEventListener("click", addWidget);
 }
 
 boot().catch(console.error);

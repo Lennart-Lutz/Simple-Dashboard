@@ -42,3 +42,23 @@ html, body {
 .dash-tabs .nav-link:hover { color: var(--text); }
 
 .dash-tabs .tab-plus { margin-left: auto; }
+
+/* Tab label + edit icon layout */
+.dash-tabs .nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Pencil icon button inside active tab (edit mode) */
+.tab-edit-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.tab-edit-btn:hover {
+  color: var(--text);
+}
