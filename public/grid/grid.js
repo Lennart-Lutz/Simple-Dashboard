@@ -21,6 +21,7 @@ export function createGrid({
   let isEditing = false;
   let items = [];
   let dragging = null;
+  let saving = false;
 
   // ---------------- DOM ----------------
   const canvas = document.createElement("div");
@@ -155,7 +156,7 @@ export function createGrid({
 
     // -------- pointerdown --------
     el.addEventListener("pointerdown", (ev) => {
-      if (!isEditing || ev.button !== 0) return;
+      if (!isEditing || saving || ev.button !== 0) return;
       ev.preventDefault();
       el.setPointerCapture(ev.pointerId);
 
@@ -210,21 +211,47 @@ export function createGrid({
       el.classList.remove("dragging");
 
       const idx = items.findIndex((x) => x.id === it.id);
-      const next = clone(items[idx]);
-      next.x = dragging.preview?.x ?? dragging.start.x;
-      next.y = dragging.preview?.y ?? dragging.start.y;
-
-      if (collides(next, it.id)) {
-        applyItemStyle(el, dragging.start);
-      } else {
-        items[idx] = next;
-        updateCanvasSize();
-        renderAll();
-        await onChange(getItems());
+      if (idx === -1) {
+        dragging = null;
+        return;
       }
 
-      dragging = null;
+      const start = dragging.start; // original item
+      const nextItem = clone(items[idx]);
+      nextItem.x = dragging.preview?.x ?? start.x;
+      nextItem.y = dragging.preview?.y ?? start.y;
+
+      // If collision, hard revert (no persistence attempt)
+      if (collides(nextItem, it.id)) {
+        applyItemStyle(el, start);
+        dragging = null;
+        return;
+      }
+
+      // Build next items array WITHOUT committing
+      const nextItems = clone(items);
+      nextItems[idx] = nextItem;
+
+      saving = true;
+      try {
+        // Persist first (must throw on failure)
+        await onChange(clone(nextItems));
+
+        // Commit only on success
+        items = nextItems;
+        updateCanvasSize();
+        renderAll();
+      } catch (e) {
+        // Rollback visuals to start position
+        applyItemStyle(el, start);
+        // Optional: ensure any preview doesn't linger
+        throw e;
+      } finally {
+        saving = false;
+        dragging = null;
+      }
     });
+
 
     el.addEventListener("pointercancel", () => {
       if (!dragging || dragging.id !== it.id) return;
@@ -259,17 +286,18 @@ export function createGrid({
   }
 
   async function addItem(it) {
-    // Build next state without committing
     const next = clone(items);
     next.push(clone(it));
 
-    // Persist first (must throw on failure)
-    await onChange(clone(next));
-
-    // Commit only on success
-    items = next;
-    updateCanvasSize();
-    renderAll();
+    saving = true;
+    try {
+      await onChange(clone(next));
+      items = next;
+      updateCanvasSize();
+      renderAll();
+    } finally {
+      saving = false;
+    }
   }
 
   window.addEventListener("resize", () => {
