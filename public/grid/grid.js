@@ -14,7 +14,7 @@ export function createGrid({
   padding = { left: 12, right: 12, top: 12, bottom: 12 },
   paddingBreakpoints = null,
 
-  onChange = async () => {},
+  onChange = async () => { },
 }) {
   if (!mountEl) throw new Error("createGrid: mountEl is required");
 
@@ -258,11 +258,18 @@ export function createGrid({
     return clone(items);
   }
 
-  function addItem(it) {
-    items.push(clone(it));
+  async function addItem(it) {
+    // Build next state without committing
+    const next = clone(items);
+    next.push(clone(it));
+
+    // Persist first (must throw on failure)
+    await onChange(clone(next));
+
+    // Commit only on success
+    items = next;
     updateCanvasSize();
     renderAll();
-    onChange(getItems());
   }
 
   window.addEventListener("resize", () => {

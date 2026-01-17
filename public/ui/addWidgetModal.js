@@ -19,7 +19,7 @@ export function createAddWidgetModal({ onAdd }) {
   async function submit() {
     elBtnAdd.disabled = true;
     try {
-      await onAdd();
+      await onAdd(); // Wait for completion
       modal.hide();
     } finally {
       elBtnAdd.disabled = false;

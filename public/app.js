@@ -47,8 +47,8 @@ const grid = createGrid({
     try {
       await apiPutState(state);
     } catch (e) {
-      showError("Failed to save dashboard layout.");
-      console.error(e);
+      showError("Failed to save dashboard layout. (Check connection?)");
+      throw e; // Needs to be thrown to allow a rollback
     }
   },
 });
@@ -110,7 +110,7 @@ const editor = createEditTabModal({
 const addWidgetModal = createAddWidgetModal({
   onAdd: async () => {
     try {
-      await addWidget();
+    await addWidget(); // Error handling in addWidget() (Modal close on success)
     } catch (e) {
       showError("Widget could not be added.");
       throw e;
@@ -189,7 +189,7 @@ async function addWidget() {
   };
 
   d.items.push(item);
-  grid.addItem(item); // Triggers onChange
+  await grid.addItem(item); // Triggers onChange
 }
 
 function toggleEdit() {
