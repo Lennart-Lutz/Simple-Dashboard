@@ -4,8 +4,8 @@ export function getActiveDashboard(state) {
   return state?.dashboards?.find((x) => x.id === state.activeId) || null;
 }
 
-export function nextWidgetId(dashboard) {
-  const used = new Set((dashboard?.items || []).map((x) => x.id));
+export function nextWidgetId(d) {
+  const used = new Set((d.items || []).map((x) => x.id));
   let i = 1;
   while (used.has(`w${i}`)) i++;
   return `w${i}`;

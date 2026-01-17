@@ -2,6 +2,7 @@
 
 import { createGrid } from "./grid/grid.js";
 import { createEditTabModal } from "./ui/editTabModal.js";
+import { createAddWidgetModal } from "./ui/addWidgetModal.js";
 import { showError, showSuccess, showInfo } from "./ui/toast.js";
 
 import { apiGetState, apiPutState, apiCreateDashboard } from "./api/dashboardsApi.js";
@@ -52,7 +53,7 @@ const grid = createGrid({
   },
 });
 
-// ---------------- UI: Edit Modal ----------------
+// ---------------- UI: Edit Tab Modal ----------------
 const editor = createEditTabModal({
   onSave: async ({ id, name }) => {
     if (!renameDashboard(state, id, name)) return;
@@ -79,7 +80,7 @@ const editor = createEditTabModal({
         await apiPutState(state);
         tabs.render();
         renderActiveDashboard();
-        showSuccess("Dashboard has been reseted.");
+        showSuccess("Dashboard has been reset.");
       } catch {
         showError("Dashboard could not be reset.");
       }
@@ -97,12 +98,24 @@ const editor = createEditTabModal({
       await apiPutState(state);
       tabs.render();
       renderActiveDashboard();
-      showSuccess("Dashboard deleted.");
     } catch {
       showError("Dashboard could not be deleted.");
     }
   },
 
+});
+
+// ---------------- UI: Add Widget Modal ----------------
+
+const addWidgetModal = createAddWidgetModal({
+  onAdd: async () => {
+    try {
+      await addWidget();
+    } catch (e) {
+      showError("Widget could not be added.");
+      throw e;
+    }
+  },
 });
 
 // ---------------- UI: Tabs View ----------------
@@ -157,23 +170,33 @@ function renderActiveDashboard() {
   grid.setItems(d.items || []);
 }
 
-function addWidget() {
+async function addWidget() {
   const d = getActiveDashboard(state);
   if (!d) return;
 
   d.items = d.items || [];
+
   const id = nextWidgetId(d);
+  const item = {
+    id,
+    x: 0,
+    y: 0,
+    w: 2,
+    h: 2,
+    // placeholder for future: type/config
+    // type: "empty",
+    // config: {}
+  };
 
-  const item = { id, x: 0, y: 0, w: 2, h: 2 };
   d.items.push(item);
-
-  grid.addItem(item);
+  grid.addItem(item); // Triggers onChange
 }
 
 function toggleEdit() {
   const enabled = !grid.isEditing;
   grid.setEditMode(enabled);
   elBtnEdit.textContent = enabled ? "Done" : "Edit";
+  elBtnAdd.classList.toggle("d-none", !enabled); // Add button only in edit mode
   tabs.render();
 }
 
@@ -186,7 +209,7 @@ async function boot() {
   grid.setEditMode(false);
 
   elBtnEdit.addEventListener("click", toggleEdit);
-  elBtnAdd.addEventListener("click", addWidget);
+  elBtnAdd.addEventListener("click", () => addWidgetModal.open());
 }
 
 boot().catch(console.error);
