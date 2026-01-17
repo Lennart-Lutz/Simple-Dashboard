@@ -1,0 +1,24 @@
+{
+  "name": "simple_dashboard",
+  "version": "1.0.0",
+  "description": "Simple Dashboard implementation for my Smart Home",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "dashboard": "node server/server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lennart-Lutz/Simple-Dashboard.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Lennart-Lutz/Simple-Dashboard/issues"
+  },
+  "homepage": "https://github.com/Lennart-Lutz/Simple-Dashboard#readme",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

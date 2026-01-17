@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "activeId": "d1",
+  "dashboards": [
+    {
+      "id": "d1",
+      "name": "Main",
+      "items": []
+    }
+  ]
+}

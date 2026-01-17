@@ -1,0 +1,71 @@
+# =========================
+# Node.js
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Environment / Secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Build / Cache
+# =========================
+dist/
+build/
+.tmp/
+.cache/
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+
+# JetBrains
+.idea/
+*.iml
+
+# =========================
+# Testing / Coverage
+# =========================
+coverage/
+
+# =========================
+# Local data / runtime files
+# (important for your dashboard)
+# =========================
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.json.bak
+
+# =========================
+# Temporary exports / screenshots
+# =========================
+exports/
+screenshots/
+
+# =========================
+# Frontend tooling (optional)
+# =========================
+.parcel-cache/
+.eslintcache
+.stylelintcache
