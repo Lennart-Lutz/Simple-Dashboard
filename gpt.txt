@@ -1,221 +1,222 @@
-I am developing a web-based, minimalist dashboard application using Node.js (Express) as backend
-and a modular Vanilla JS + Bootstrap 5 frontend.
+PROJECT: Modular Web Dashboard (Node.js + Vanilla JS + Bootstrap + ECharts)
 
-The goal is a configurable dashboard system with multiple dashboards ("tabs").
-Each dashboard contains widgets that can be freely positioned inside a custom grid system.
-The complete application state is persisted server-side in a JSON file.
-There is NO LocalStorage and NO optimistic UI.
+I am building a web-based, configurable dashboard application.
 
-------------------------------------------------------------
-CURRENT FEATURES / CAPABILITIES
-------------------------------------------------------------
+The goal is a minimalistic dashboard system with:
+- multiple dashboards (tabs)
+- widgets arranged in a fixed grid
+- strict server-side persistence (single JSON state)
+- modular widget architecture (each widget = isolated module)
 
-Dashboards (Tabs)
+This is NOT a framework-heavy project.
+No React/Vue.
+No LocalStorage.
+Everything is explicit, predictable and debuggable.
+
+============================================================
+CORE FEATURES (CURRENT STATE)
+============================================================
+
+- Express backend with JSON persistence
+- Single source of truth: dashboards.json
 - Multiple dashboards (tabs)
-- Active dashboard stored in global state
-- Create new dashboards (plus button)
-- Rename and delete dashboards via modal
-- Last remaining dashboard cannot be deleted (reset instead)
-- Switching dashboards persists activeId
+  - create
+  - rename
+  - delete (with safety fallback for last dashboard)
+- Active dashboard persisted
+- Edit mode
+  - grid overlay visible
+  - widgets draggable (no resize)
+  - add widget button visible
+- Strict persistence
+  - move/add only commits AFTER successful PUT
+  - rollback on error
+- Central toast system for errors / feedback
 
-Edit Mode
-- Toggle Edit / Done button
-- Grid overlay visible only in edit mode
-- Widgets are movable (NO resize)
-- Add Widget button only visible in edit mode
-- Pencil icon on active tab for rename/delete (edit mode only)
+============================================================
+GRID SYSTEM
+============================================================
 
-Custom Grid Engine (no gridstack / grid.js)
-- Absolute positioning on fixed cell grid
-- Cell size + padding configurable
-- Overlay cells rendered only in edit mode
-- Collision detection prevents overlapping widgets
-- Canvas resizes dynamically based on content
-- Re-render on window resize
+- Custom grid engine (no gridstack / grid.js)
+- Fixed cell size
+- Drag & snap movement
+- Collision detection
+- Grid overlay rendered only in edit mode
+- Grid change → onChange(items) → PUT full state → commit
 
-Strict Persistence (Transactional Behavior)
-- Widget ADD and MOVE are STRICT:
-  - Persist first (PUT /api/dashboards)
-  - Commit UI only after successful save
-  - Rollback UI on server error
-- No optimistic UI
-- onChange writes the complete state snapshot
-- In-memory state is replaced only after successful PUT
+============================================================
+WIDGET SYSTEM (IMPORTANT)
+============================================================
 
-Widgets System (Plugin Architecture)
-- Widgets are modular and pluggable
-- Each widget lives in public/widgets/<type>/widget.js
-- Widget registry maps type -> module
-- Widget host mounts / updates / unmounts widgets inside grid items
-- Grid only handles layout, widgets handle rendering and data
+Each widget is a self-contained module:
 
-Implemented Widget: value1x1
-- Size: 1x1
+/public/widgets/<widgetName>/
+  └─ widget.js
+
+Each widget exports:
+- meta
+- mount(el, ctx)
+- update(inst, ctx)
+- unmount(inst)
+
+Widgets are mounted via a WidgetHost that:
+- syncs widgets with grid items
+- mounts/unmounts on dashboard switch
+- updates on config changes
+
+Widgets do their own:
+- fetch logic
+- timers
+- rendering
+- cleanup
+
+============================================================
+CURRENT WIDGETS
+============================================================
+
+1) value1x1
 - Displays a single numeric value
-- Performs its own fetch requests
-- Configurable via Add Widget modal:
-  - Title (max length)
-  - Refresh interval (polling)
-  - Endpoint (mandatory)
-  - Optional query key + query value
-- Widget configuration is persisted in JSON
-- Widget reacts correctly to config updates (update lifecycle)
-- Refresh interval is per-widget
+- Configurable:
+  - title
+  - refresh interval
+  - endpoint
+  - query param key/value
+- Polls endpoint via fetch
+- Fully isolated module
 
-Backend / API
-- GET  /api/dashboards      -> returns complete dashboard state
-- PUT  /api/dashboards      -> overwrites complete state (snapshot)
-- POST /api/dashboards      -> creates a new dashboard
-- GET  /api/demo/latest     -> demo endpoint for widget data
+2) gauge3x3
+- ECharts gauge
+- Configurable:
+  - title
+  - min / max
+  - colored ranges (from/to/color)
+  - refresh interval
+  - endpoint + params
+- Fixed size, centered gauge
+- Custom tick/label styling
 
-------------------------------------------------------------
-STATE / DATA MODEL
-------------------------------------------------------------
+============================================================
+ADD WIDGET MODAL
+============================================================
 
-Global persisted state:
+- Generic modal driven by widget meta
+- Widget types loaded from registry
+- Fields generated dynamically from meta.fields
+- Supported field kinds:
+  - text
+  - number
+  - select
+  - ranges (custom range editor with color picker)
+- Required field validation
+- No defaults pre-filled (user must decide)
+
+============================================================
+STATE MODEL
+============================================================
+
+dashboards.json:
 
 {
-  "version": 1,
-  "activeId": "d1",
-  "dashboards": [
+  version,
+  activeId,
+  dashboards: [
     {
-      "id": "d1",
-      "name": "Main",
-      "items": [
+      id,
+      name,
+      items: [
         {
-          "id": "w1",
-          "x": 0,
-          "y": 0,
-          "w": 1,
-          "h": 1,
-          "type": "value1x1",
-          "config": {
-            "title": "CO₂",
-            "endpoint": "/api/demo/latest",
-            "paramKey": "param",
-            "paramValue": "co2",
-            "refreshMs": 5000
-          }
+          id,
+          x, y, w, h,
+          type,
+          config { ...widget specific }
         }
       ]
     }
   ]
 }
 
-------------------------------------------------------------
+Client keeps full state in memory.
+PUT always sends full state.
+Server overwrites JSON atomically.
+
+============================================================
 PROJECT STRUCTURE
-------------------------------------------------------------
+============================================================
 
 project-root/
 ├─ server/
-│  └─ server.js
-│     # Express server
-│     # REST API
-│     # JSON persistence
-│     # Demo data endpoint
+│  └─ server.js                 # Express server + API + persistence
 │
 ├─ data/
-│  └─ dashboards.json
-│     # Persisted dashboard snapshot
+│  └─ dashboards.json           # Persisted state
 │
 ├─ public/
-│  ├─ index.html
-│  │  # App shell
-│  │  # Header, tabs, grid mount
-│  │  # Add Widget modal
-│  │  # Edit Dashboard modal
-│  │
-│  ├─ style.css
-│  │  # Global styles
-│  │  # Tabs styling
-│  │
-│  ├─ app.js
-│  │  # Application orchestrator
-│  │  # State handling
-│  │  # Grid + widget host wiring
-│  │
+│  ├─ index.html                # App shell, header, tabs, modals
+│  ├─ style.css                 # Global styles
+│
+│  ├─ app.js                    # App orchestrator (state + wiring)
+│
 │  ├─ api/
-│  │  └─ dashboardsApi.js
-│  │     # fetch wrappers for dashboard API
-│  │
+│  │  └─ dashboardsApi.js       # REST API wrapper
+│
 │  ├─ state/
-│  │  └─ dashboardsState.js
-│  │     # pure state helpers (no DOM)
-│  │
+│  │  └─ dashboardsState.js     # Pure state helpers
+│
 │  ├─ grid/
-│  │  ├─ grid.js
-│  │  │  # Custom grid engine
-│  │  │  # Strict add + strict move
-│  │  └─ grid.css
-│  │     # Grid + widget container styling
-│  │
-│  ├─ ui/
-│  │  ├─ tabsView.js
-│  │  │  # Dashboard tabs rendering
-│  │  ├─ editTabModal.js
-│  │  │  # Rename / delete dashboard modal
-│  │  ├─ addWidgetModal.js
-│  │  │  # Add widget modal (type + config)
-│  │  └─ toast.js
-│  │     # Central toast system
-│  │
-│  └─ widgets/
-│     ├─ registry.js
-│     │  # Widget registry (type -> module)
-│     ├─ host.js
-│     │  # Widget lifecycle manager (mount/update/unmount)
-│     └─ value1x1/
-│        └─ widget.js
-│           # value1x1 widget implementation
+│  │  ├─ grid.js                # Custom grid engine
+│  │  └─ grid.css               # Grid + widget layout
+│
+│  ├─ widgets/
+│  │  ├─ registry.js            # Widget registry + metas
+│  │  ├─ host.js                # Widget mount/update/unmount manager
+│  │  ├─ value1x1/
+│  │  │  └─ widget.js
+│  │  └─ gauge3x3/
+│  │     └─ widget.js
+│
+│  └─ ui/
+│     ├─ tabsView.js            # Dashboard tabs
+│     ├─ addWidgetModal.js      # Generic widget creation modal
+│     ├─ editTabModal.js        # Rename / delete dashboard
+│     └─ toast.js               # Central toast system
 │
 └─ package.json
 
-------------------------------------------------------------
-WHERE TO ADD MORE WIDGETS
-------------------------------------------------------------
+============================================================
+DESIGN PRINCIPLES
+============================================================
 
-To add a new widget type:
+- Explicit state transitions
+- No magic data flow
+- Widgets are isolated and disposable
+- Backend is dumb and reliable
+- UI logic is modular and boring (on purpose)
+- Easy to debug with DevTools
 
-1) Create new widget module:
-   public/widgets/<type>/widget.js
+============================================================
+TODO LIST (NEXT STEPS)
+============================================================
 
-2) Export:
-   - DEFAULT (w, h, type, config)
-   - mount(el, ctx)
-   - update(inst, ctx)
-   - unmount(inst)
+[ ] Delete widgets
+    - probably via widget edit modal
+    - strict delete (persist first)
 
-3) Register widget:
-   public/widgets/registry.js
+[ ] Edit widget modal
+    - reuse addWidgetModal rendering
+    - allow updating widget config
+    - include Delete button
 
-4) Add widget type to Add Widget modal:
-   - Dropdown option in index.html
-   - renderOptions() + submit payload in addWidgetModal.js
+[ ] linechart4x4 widget
+    - ECharts line chart
+    - range-based endpoint (from/to)
+    - widget-local refresh
+    - later: dashboard-wide range
 
-5) Map payload to item.config in app.js (addWidget function)
+[ ] Range buttons in header
+    - set dashboard time range (1h, 6h, 24h, 7d)
+    - propagate via widget ctx
+    - disable widget-local range where applicable
 
-Grid and host do NOT need to be changed.
-
-------------------------------------------------------------
-TODO / NEXT STEPS
-------------------------------------------------------------
-
-TODO 1: More Widgets
-- gauge2x2 (ECharts gauge)
-- line4x4 / chart widgets (line / bar / scatter)
-- Shared widget config patterns (endpoint, params, range, units)
-
-TODO 2: Edit Widget Modal
-- Settings / gear button on widget (edit mode)
-- Modal to edit widget config
-- Strict persistence (same as add/move)
-- Call widgetHost.update() after save
-
-TODO 3: Delete Widget
-- Delete button per widget in edit mode
-- Optional confirm modal
-- Strict delete (persist first, then remove from UI)
-
-------------------------------------------------------------
+============================================================
 END
-------------------------------------------------------------
+============================================================

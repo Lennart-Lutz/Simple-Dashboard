@@ -1,8 +1,10 @@
 // public/widgets/registry.js
 import * as value1x1 from "./value1x1/widget.js";
+import * as gauge3x3 from "./gauge3x3/widget.js";
 
 export const WIDGETS = {
   [value1x1.meta.type]: value1x1,
+  [gauge3x3.meta.type]: gauge3x3,
 };
 
 export function getWidget(type) {

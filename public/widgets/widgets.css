@@ -22,3 +22,25 @@
   font-weight: 600;
   line-height: 1;
 }
+
+/* gauge3x3 widget */
+.widget-gauge3x3 {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.widget-gauge3x3 .gauge3x3-title {
+  font-size: 1rem;
+  padding: 8px 10px 0 10px;
+  line-height: 1;
+}
+
+.widget-gauge3x3 .gauge3x3-chart {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

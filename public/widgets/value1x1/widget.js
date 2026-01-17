@@ -6,7 +6,7 @@ export const meta = {
   size: { w: 1, h: 1 },
 
   defaults: {
-    title: "value",
+    title: "Value",
     refreshMs: 5000,
     endpoint: "/api/latest",
     paramKey: "key",
