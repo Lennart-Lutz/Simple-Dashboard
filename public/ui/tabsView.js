@@ -60,7 +60,7 @@ export function createTabsView({
     const btnPlus = document.createElement("button");
     btnPlus.className = "nav-link";
     btnPlus.type = "button";
-    btnPlus.textContent = "+";
+    btnPlus.innerHTML = `<i class="bi bi-plus"></i>`;
     btnPlus.title = "Neues Dashboard";
 
     btnPlus.addEventListener("click", () => onCreateNew());

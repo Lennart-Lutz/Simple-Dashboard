@@ -19,29 +19,41 @@ html, body {
 }
 
 /* Tabs */
-.dash-tabs {
+.dash-tabs{
   border-bottom: 2px solid var(--line);
-  margin-bottom: 0;
+  margin-left: 14px;
+  margin-right: 14px;
 }
 
-.dash-tabs .nav-link {
-  color: var(--muted);
+.dash-tabs .nav-link{
   border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  padding: 10px 12px;
-  font-size: 0.95rem;
+  padding: 4px 12px;
+  color: var(--muted);
+  position: relative;
 }
 
-.dash-tabs .nav-link.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
+.dash-tabs .nav-link::after{
+  content:"";
+  position: absolute;
+  left: 0px;
+  right: 0px;
+  bottom: -1px;
+  height: 3px;
   background: transparent;
 }
 
-.dash-tabs .nav-link:hover { color: var(--text); }
+.dash-tabs .nav-link.active{
+  color: var(--text);
+  background: transparent;
+}
 
-.dash-tabs .tab-plus { margin-left: auto; }
+.dash-tabs .nav-link.active::after{
+  background: #111;
+}
+
+.dash-tabs .nav-link:hover{
+  color: var(--text);
+}
 
 /* Tab label + edit icon layout */
 .dash-tabs .nav-link {
