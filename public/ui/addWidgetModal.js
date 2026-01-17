@@ -1,93 +1,131 @@
 // public/ui/addWidgetModal.js
 
-export function createAddWidgetModal({ onAdd }) {
+export function createAddWidgetModal({ getWidgetMetas, getWidgetMeta, onAdd }) {
   const elModal = document.getElementById("addWidgetModal");
   const elBtnAdd = document.getElementById("addWidgetConfirm");
   const elType = document.getElementById("addWidgetType");
   const elOptions = document.getElementById("addWidgetOptions");
 
-  if (!elModal || !elBtnAdd || !elType || !elOptions) {
-    throw new Error("AddWidget modal elements not found.");
-  }
-  if (typeof bootstrap === "undefined" || !bootstrap.Modal) {
-    throw new Error("Bootstrap JS Modal not available.");
-  }
+  if (!elModal || !elBtnAdd || !elType || !elOptions) throw new Error("AddWidget modal elements missing.");
+  if (typeof bootstrap === "undefined" || !bootstrap.Modal) throw new Error("Bootstrap JS Modal not available.");
 
   const modal = bootstrap.Modal.getOrCreateInstance(elModal);
 
-  function renderOptions() {
-    const type = elType.value;
+  function esc(s) {
+    return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
 
-    // value1x1
-    if (type === "value1x1") {
-      elOptions.innerHTML = `
-        <div class="mb-2" style="margin-top: 32px;">
-          <label class="form-label">Title</label>
-          <input id="addWidgetTitle" type="text" class="form-control" maxlength="10" autocomplete="off" />
-        </div>
+  function renderTypeOptions() {
+    const metas = getWidgetMetas() || [];
+    elType.innerHTML = metas
+      .map((m) => `<option value="${esc(m.type)}">${esc(m.label || m.type)}</option>`)
+      .join("");
+  }
 
+  function renderField(field, value) {
+    const id = `addWidgetField_${field.key}`;
+    const label = esc(field.label || field.key);
+    const req = field.required ? ` <span class="text-danger">*</span>` : "";
+    const ph = field.placeholder ? ` placeholder="${esc(field.placeholder)}"` : "";
+
+    if (field.kind === "select") {
+      const opts = (field.options || [])
+        .map((o) => {
+          const sel = String(o.value) === String(value) ? " selected" : "";
+          return `<option value="${esc(o.value)}"${sel}>${esc(o.label ?? o.value)}</option>`;
+        })
+        .join("");
+      return `
         <div class="mb-3">
-          <label class="form-label">Refresh Interval</label>
-          <select id="addWidgetRefresh" class="form-select">
-            <option value="1000">1s</option>
-            <option value="2000">2s</option>
-            <option value="5000" selected>5s</option>
-            <option value="10000">10s</option>
-            <option value="30000">30s</option>
-            <option value="60000">1m</option>
-            <option value="300000">5m</option>
-            <option value="600000">10m</option>
-            <option value="1800000">30m</option>
-            <option value="3600000">1h</option>
-          </select>
-          <div class="form-text">Applies only to this widget.</div>
-        </div>
-
-        <div class="mt-2">
-          <div class="mb-2">
-            <label class="form-label">Endpoint</label>
-            <input id="addWidgetEndpoint" type="text" class="form-control" autocomplete="off"
-                  placeholder="/api/latest" />
-          </div>
-
-          <div class="row g-2">
-            <div class="col-6">
-              <label class="form-label">Query key</label>
-              <input id="addWidgetParamKey" type="text" class="form-control" autocomplete="off"
-                    placeholder="key" />
-            </div>
-            <div class="col-6">
-              <label class="form-label">Query value</label>
-              <input id="addWidgetParamValue" type="text" class="form-control" autocomplete="off"
-                    placeholder="value" />
-            </div>
-          </div>
-
-          <div class="form-text mt-2">
-            Example: <code>/api/latest?key=value</code>
-          </div>
+          <label class="form-label">${label}${req}</label>
+          <select id="${id}" class="form-select">${opts}</select>
+          ${renderHelp(field)}
         </div>
       `;
+    }
+
+    function renderHelp(field) {
+      const help = field.help ? `<div class="form-text">${esc(field.help)}</div>` : "";
+      const helpCode = field.helpCode
+        ? `<div class="form-text">${field.help ? "" : ""}<code>${esc(field.helpCode)}</code></div>`
+        : "";
+
+      if (field.help && field.helpCode) {
+        return `<div class="form-text">${esc(field.help)} <code>${esc(field.helpCode)}</code></div>`;
+      }
+      return help || helpCode;
+    }
+
+
+    // text (default)
+    const max = field.max ? ` maxlength="${esc(field.max)}"` : "";
+    return `
+      <div class="mb-2">
+        <label class="form-label">${label}${req}</label>
+        <input id="${id}" type="text" class="form-control"${max}${ph} value="${esc(value)}" autocomplete="off" />
+        ${renderHelp(field)}
+      </div>
+    `;
+  }
+
+  function renderOptions() {
+    const type = elType.value;
+    const meta = getWidgetMeta(type);
+    if (!meta) {
+      elOptions.innerHTML = `<div class="text-muted small">Unknown widget type.</div>`;
       return;
     }
 
-    elOptions.innerHTML = `<div class="text-muted small">No options.</div>`;
+    const fields = meta.fields || [];
+    const defaults = meta.defaults || {};
+
+    elOptions.innerHTML = `
+      ${fields.map((f) => renderField(f, "")).join("")}
+    `;
+  }
+
+  function readField(field) {
+    const id = `addWidgetField_${field.key}`;
+    const el = document.getElementById(id);
+    if (!el) return undefined;
+
+    if (field.kind === "select") {
+      const v = el.value;
+      return typeof field.options?.[0]?.value === "number" ? Number(v) : v;
+    }
+    return (el.value || "").trim();
+  }
+
+  function validate(meta) {
+    for (const f of meta.fields || []) {
+      if (!f.required) continue;
+      const v = readField(f);
+      if (v === undefined || v === null || v === "") {
+        // focus missing required field
+        document.getElementById(`addWidgetField_${f.key}`)?.focus();
+        return false;
+      }
+    }
+    return true;
   }
 
   async function submit() {
     elBtnAdd.disabled = true;
     try {
       const type = elType.value;
-      const titleEl = document.getElementById("addWidgetTitle");
-      const title = (titleEl?.value || "").trim();
-      const endpoint = (document.getElementById("addWidgetEndpoint")?.value || "").trim();
-      const paramKey = (document.getElementById("addWidgetParamKey")?.value || "").trim();
-      const paramValue = (document.getElementById("addWidgetParamValue")?.value || "").trim();
-      const refreshMsRaw = (document.getElementById("addWidgetRefresh")?.value || "").trim();
-      const refreshMs = Number(refreshMsRaw);
+      const meta = getWidgetMeta(type);
+      if (!meta) return;
 
-      await onAdd({ type, title, endpoint, paramKey, paramValue, refreshMs });
+      if (!validate(meta)) return;
 
+      const config = {};
+      for (const f of meta.fields || []) {
+        const v = readField(f);
+        // allow optional empty strings -> omit or keep; here: keep if not empty, else omit
+        if (v !== "" && v !== undefined) config[f.key] = v;
+      }
+
+      await onAdd({ type, config });
       modal.hide();
     } finally {
       elBtnAdd.disabled = false;
@@ -95,21 +133,15 @@ export function createAddWidgetModal({ onAdd }) {
   }
 
   elBtnAdd.addEventListener("click", submit);
-
   elType.addEventListener("change", renderOptions);
 
   elModal.addEventListener("shown.bs.modal", () => {
+    renderTypeOptions();
     renderOptions();
-    // focus title if exists
-    const titleEl = document.getElementById("addWidgetTitle");
-    if (titleEl) {
-      titleEl.focus();
-      titleEl.select();
-    }
-  });
-
-  elModal.addEventListener("hidden.bs.modal", () => {
-    elBtnAdd.disabled = false;
+    // focus first field
+    const meta = getWidgetMeta(elType.value);
+    const first = meta?.fields?.[0]?.key;
+    if (first) document.getElementById(`addWidgetField_${first}`)?.focus();
   });
 
   function open() {

@@ -6,7 +6,7 @@ import { createAddWidgetModal } from "./ui/addWidgetModal.js";
 import { showError, showSuccess, showInfo } from "./ui/toast.js";
 
 import { createWidgetHost } from "./widgets/host.js";
-import { createDefaultItem } from "./widgets/registry.js";
+import { listWidgetMetas, getWidget, createDefaultItem } from "./widgets/registry.js";
 
 import { apiGetState, apiPutState, apiCreateDashboard } from "./api/dashboardsApi.js";
 import { getActiveDashboard, nextWidgetId, renameDashboard, setActiveDashboard } from "./state/dashboardsState.js";
@@ -139,9 +139,11 @@ const editor = createEditTabModal({
 // ---------------- UI: Add Widget Modal ----------------
 
 const addWidgetModal = createAddWidgetModal({
+  getWidgetMetas: () => listWidgetMetas(),
+  getWidgetMeta: (type) => getWidget(type)?.meta || null,
   onAdd: async (payload) => {
     try {
-      await addWidget(payload); // Error handling in addWidget() (Modal close on success)
+      await addWidget(payload);
     } catch (e) {
       showError("Widget could not be added.");
       throw e;
@@ -202,7 +204,7 @@ function renderActiveDashboard() {
   syncWidgets(); // Load active widgets
 }
 
-async function addWidget({ type, title, endpoint, paramKey, paramValue, refreshMs }) {
+async function addWidget({ type, config }) {
   const d = getActiveDashboard(state);
   if (!d) return;
 
@@ -210,6 +212,7 @@ async function addWidget({ type, title, endpoint, paramKey, paramValue, refreshM
 
   const id = nextWidgetId(d);
   const base = createDefaultItem(type);
+
   const item = {
     id,
     x: 0,
@@ -219,19 +222,12 @@ async function addWidget({ type, title, endpoint, paramKey, paramValue, refreshM
     type,
     config: {
       ...(base.config || {}),
-      title: title || base.config?.title,
-      endpoint: endpoint || base.config?.endpoint,
-      paramKey: paramKey || base.config?.paramKey,
-      paramValue: paramValue || base.config?.paramValue,
-      refreshMs: refreshMs != null ? refreshMs : base.config?.refreshMs,
+      ...(config || {}),
     },
   };
 
-  // strict add (persist first in grid.addItem)
   await grid.addItem(item);
-  //d.items.push(item);
 }
-
 
 function toggleEdit() {
   const enabled = !grid.isEditing;
