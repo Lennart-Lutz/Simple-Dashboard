@@ -1,4 +1,10 @@
 // public/widgets/value1x1/widget.js
+//
+// Value widget (1x1).
+// Periodically fetches a single value from an endpoint and displays it.
+//
+// Expected response:
+//   { value: number|string|null }
 
 export const meta = {
   type: "value1x1",
@@ -8,13 +14,19 @@ export const meta = {
   defaults: {
     title: "Value",
     refreshMs: 5000,
+
+    source: {
+      endpoint: "/api/latest",
+    },
+
     endpoint: "/api/latest",
     paramKey: "key",
     paramValue: "value",
   },
 
   fields: [
-    { key: "title", label: "Title", kind: "text", max: 10, placeholder: "" },
+    { key: "title", label: "Title", kind: "text", max: 10 },
+
     {
       key: "refreshMs",
       label: "Refresh Interval",
@@ -33,99 +45,112 @@ export const meta = {
         { value: 3600000, label: "1h" },
       ],
     },
-    { key: "endpoint", label: "Endpoint", kind: "text", required: true, placeholder: "/api/latest", help: "Example:", helpCode: "/api/latest?key=value" },
-    { key: "paramKey", label: "Query key", kind: "text", placeholder: "key" },
-    { key: "paramValue", label: "Query value", kind: "text", placeholder: "value" },
+
+    {
+      key: "source",
+      label: "Endpoint",
+      kind: "singleValueSource",
+      required: true,
+      help: "Endpoint with optional query parameters.",
+      helpCode: "/api/latest?key=value",
+    },
   ],
 };
 
-function buildUrl(cfg) {
-    const endpoint = (cfg?.endpoint || meta.defaults.endpoint).trim();
-    const u = new URL(endpoint, window.location.origin);
+function normalizeRefreshMs(v, fallback = 5000) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(1000, Math.round(n));
+}
 
-    const k = (cfg?.paramKey || meta.defaults.paramKey).trim();
-    const v = (cfg?.paramValue || meta.defaults.paramValue).trim();
-    if (k && v) u.searchParams.set(k, v);
-    return u.toString();
+function buildUrl(cfg) {
+  const src = cfg?.source || {};
+  const endpoint = String(
+    src.endpoint ||
+    cfg.endpoint ||
+    meta.defaults.source.endpoint
+  ).trim();
+
+  const u = new URL(endpoint, window.location.origin);
+
+  const k = String(src.paramKey ?? cfg.paramKey ?? "").trim();
+  const v = String(src.paramValue ?? cfg.paramValue ?? "").trim();
+  if (k && v) u.searchParams.set(k, v);
+
+  return u.toString();
 }
 
 async function fetchLatest(cfg, { signal } = {}) {
-    const url = buildUrl(cfg);
-    const r = await fetch(url, { signal });
-    if (!r.ok) throw new Error(`fetch failed: ${r.status}`);
-    return await r.json();
-}
-
-function normalizeRefreshMs(v, fallback = 5000) {
-    const n = Number(v);
-    if (!Number.isFinite(n)) return fallback;
-
-    return Math.max(1000, Math.round(n));
+  const url = buildUrl(cfg);
+  const r = await fetch(url, { signal });
+  if (!r.ok) throw new Error(`fetch failed: ${r.status}`);
+  return await r.json();
 }
 
 export function mount(el, ctx) {
-    el.classList.add("widget-value1x1");
-    el.innerHTML = `
+  el.classList.add("widget-value1x1");
+  el.innerHTML = `
     <div class="value1x1-title"></div>
     <div class="value1x1-value">—</div>
   `;
 
-    const elTitle = el.querySelector(".value1x1-title");
-    const elValue = el.querySelector(".value1x1-value");
+  const elTitle = el.querySelector(".value1x1-title");
+  const elValue = el.querySelector(".value1x1-value");
 
-    const ac = new AbortController();
+  const ac = new AbortController();
 
-    const inst = {
-        ac,
-        elTitle,
-        elValue,
-        cfg: { ...(ctx.item?.config || {}) },
-        timer: null,
-    };
+  const inst = {
+    ac,
+    elTitle,
+    elValue,
+    cfg: { ...(ctx.item?.config || {}) },
+    timer: null,
+  };
 
-    function applyAll() {
-        const t = (inst.cfg.title || "").trim() || meta.defaults.title;
-        inst.elTitle.textContent = t;
+  function applyTitle() {
+    const t = String(inst.cfg.title || "").trim() || meta.defaults.title;
+    elTitle.textContent = t;
+  }
+
+  async function refresh() {
+    try {
+      const data = await fetchLatest(inst.cfg, { signal: ac.signal });
+      const v = data?.value;
+      elValue.textContent = v == null ? "—" : String(v);
+    } catch (e) {
+      if (e?.name === "AbortError") return;
+      elValue.textContent = "ERR";
     }
+  }
 
-    async function refresh() {
-        try {
-            const data = await fetchLatest(inst.cfg, { signal: ac.signal });
-            inst.elValue.textContent = data?.value == null ? "—" : String(data.value);
-        } catch (e) {
-            if (e?.name === "AbortError") return;
-            inst.elValue.textContent = "ERR";
-        }
-    }
+  function setTimer() {
+    if (inst.timer) window.clearInterval(inst.timer);
+    const ms = normalizeRefreshMs(inst.cfg.refreshMs, meta.defaults.refreshMs);
+    inst.cfg.refreshMs = ms;
+    inst.timer = window.setInterval(refresh, ms);
+  }
 
-    function setTimer() {
-        if (inst.timer) window.clearInterval(inst.timer);
-        const ms = normalizeRefreshMs(inst.cfg.refreshMs, meta.defaults.refreshMs);
-        inst.cfg.refreshMs = ms; // normalize back into cfg for consistency
-        inst.timer = window.setInterval(refresh, ms);
-    }
+  inst.refresh = refresh;
+  inst.setTimer = setTimer;
 
-    inst.refresh = refresh;
-    inst.setTimer = setTimer;
+  applyTitle();
+  refresh();
+  setTimer();
 
-    applyAll();
-    refresh();
-    setTimer();
-
-    return inst;
+  return inst;
 }
 
 export function update(inst, ctx) {
-    inst.cfg = { ...(ctx.item?.config || {}) };
-    const t = (inst.cfg.title || "").trim() || meta.defaults.title;
-    inst.elTitle.textContent = t;
+  inst.cfg = { ...(ctx.item?.config || {}) };
 
-    inst.setTimer?.();
-    inst.refresh?.();
+  const t = String(inst.cfg.title || "").trim() || meta.defaults.title;
+  inst.elTitle.textContent = t;
+
+  inst.setTimer?.();
+  inst.refresh?.();
 }
 
 export function unmount(inst) {
-    try { inst.ac.abort(); } catch { }
-    try { window.clearInterval(inst.timer); } catch { }
+  try { inst.ac.abort(); } catch {}
+  try { window.clearInterval(inst.timer); } catch {}
 }
-

@@ -14,16 +14,12 @@ export const meta = {
 
     defaults: {
         title: "LineChart",
-        refreshMs: 60000, // 1m
-        endpoint: "/api/range",
-        rangeMs: 6 * 60 * 60 * 1000, // 6h
+        refreshMs: 60000,
+        rangeMs: 6 * 60 * 60 * 1000,
         maxPoints: 400,
-        paramKey: "key",
-        paramValue: "value",
-        yMin: "", // auto
-        yMax: "", // auto
-        lineColor: "#0d6efd", // bootstrap blue
-        legendLabel: "", // auto (paramValue)
+        yMin: "",
+        yMax: "",
+        sources: [], // created via modal
     },
 
     fields: [
@@ -33,16 +29,14 @@ export const meta = {
             label: "Refresh Interval",
             kind: "select",
             required: true,
-            placeholder: "",
             options: [
                 { value: 60000, label: "1m" },
                 { value: 300000, label: "5m" },
                 { value: 600000, label: "10m" },
                 { value: 1800000, label: "30m" },
-                { value: 6000000, label: "1h" },
+                { value: 3600000, label: "1h" },
             ],
         },
-
         {
             key: "rangeMs",
             label: "Fallback range",
@@ -55,34 +49,25 @@ export const meta = {
                 { value: 7 * 24 * 60 * 60 * 1000, label: "7d" },
                 { value: 30 * 24 * 60 * 60 * 1000, label: "30d" },
             ],
-            help: "Used only when no dashboard range is set.",
+            help: "Used when no time range is set.",
         },
+
+        { key: "maxPoints", label: "Max points", kind: "number", required: true, placeholder: "", help: "Maximum data points to display." },
 
         {
-            key: "endpoint",
-            label: "Endpoint",
-            kind: "text",
+            key: "sources",
+            label: "Time Series",
+            kind: "multiSeriesSource",
             required: true,
-            placeholder: "",
-            help: "Expected params:",
-            helpCode: "from_ts_ms, to_ts_ms, max_points",
+            maxRows: 3,
+            help: "Up to 3 series. Each series defines endpoint + label + color.",
         },
-
-        { key: "paramKey", label: "Query key", kind: "text", placeholder: "" },
-        { key: "paramValue", label: "Query value", kind: "text", placeholder: "" },
-        { key: "maxPoints", label: "Max points", kind: "number", required: true, placeholder: "" },
 
         { key: "yMin", label: "Y min", kind: "number", required: false, placeholder: "auto", help: "Leave empty for auto." },
         { key: "yMax", label: "Y max", kind: "number", required: false, placeholder: "auto", help: "Leave empty for auto." },
-        { key: "legendLabel", label: "Legend label", kind: "text", required: false, placeholder: "auto" },
-        { key: "lineColor", label: "Line color", kind: "text", required: false, placeholder: "", help: "CSS color, e.g. #111." },
     ],
-};
 
-function normalizeNumber(v, fallback) {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : fallback;
-}
+};
 
 function normalizeRefreshMs(v, fallback) {
     const n = Number(v);
@@ -128,24 +113,11 @@ function getDashboardRange(ctx) {
     }
 }
 
-function getSeriesName(cfg) {
-    const explicit = String(cfg?.legendLabel ?? "").trim();
-    if (explicit) return explicit;
-
-    const pv = String(cfg?.paramValue ?? "").trim();
-    if (pv) return pv;
-
-    return "Series";
-}
-
-
-function buildUrl(cfg, ctx) {
-    const endpoint = String(cfg?.endpoint || meta.defaults.endpoint).trim();
+function buildUrlForSource(src, cfg, ctx) {
+    const endpoint = String(src?.endpoint || "").trim();
     const u = new URL(endpoint, window.location.origin);
 
-    // Determine time range (dashboard first, fallback to widget-local rangeMs)
     const dash = getDashboardRange(ctx);
-
     let fromTsMs, toTsMs;
 
     if (dash) {
@@ -164,13 +136,13 @@ function buildUrl(cfg, ctx) {
     u.searchParams.set("to_ts_ms", String(toTsMs));
     u.searchParams.set("max_points", String(maxPoints));
 
-    // Optional selector parameter
-    const k = String(cfg?.paramKey ?? meta.defaults.paramKey).trim();
-    const v = String(cfg?.paramValue ?? meta.defaults.paramValue).trim();
+    const k = String(src?.paramKey ?? "").trim();
+    const v = String(src?.paramValue ?? "").trim();
     if (k && v) u.searchParams.set(k, v);
 
     return u.toString();
 }
+
 
 function parsePoints(payload) {
     // Accept:
@@ -195,16 +167,16 @@ function parsePoints(payload) {
     return out;
 }
 
-async function fetchRange(cfg, ctx, { signal } = {}) {
-    const url = buildUrl(cfg, ctx);
+async function fetchSeries(src, cfg, ctx, { signal } = {}) {
+    const url = buildUrlForSource(src, cfg, ctx);
     const r = await fetch(url, { signal });
     if (!r.ok) throw new Error(`fetch failed: ${r.status}`);
-    return await r.json();
+    const payload = await r.json();
+    return parsePoints(payload);
 }
 
-function makeOption({ title, seriesName, points, yMin, yMax, lineColor }) {
+function makeOption({ title, series, yMin, yMax }) {
     const yAxis = { type: "value", scale: true };
-
     if (Number.isFinite(yMin)) yAxis.min = yMin;
     if (Number.isFinite(yMax)) yAxis.max = yMax;
 
@@ -216,10 +188,7 @@ function makeOption({ title, seriesName, points, yMin, yMax, lineColor }) {
             text: title,
             left: 0,
             top: 1,
-            textStyle: {
-                fontSize: 16,
-                fontWeight: 400,
-            },
+            textStyle: { fontSize: 16, fontWeight: 400 },
         },
 
         legend: {
@@ -229,37 +198,25 @@ function makeOption({ title, seriesName, points, yMin, yMax, lineColor }) {
             icon: "circle",
             itemWidth: 8,
             itemHeight: 8,
-            textStyle: {
-                fontSize: 11,
-                color: "#666",
-            },
+            textStyle: { fontSize: 11, color: "#666" },
         },
 
         tooltip: { trigger: "axis" },
 
-        // Push plot area down to make room for title + legend
-        grid: {
-            left: 4,
-            right: 8,
-            top: 40,
-            bottom: 18,
-            containLabel: true,
-        },
+        grid: { left: 4, right: 8, top: 40, bottom: 18, containLabel: true },
 
         xAxis: { type: "time", boundaryGap: false },
         yAxis,
 
-        series: [
-            {
-                name: seriesName,
-                type: "line",
-                showSymbol: false,
-                data: points.map(([ts, v]) => [ts, v]),
-                lineStyle: { width: 2, color: lineColor },
-                itemStyle: { color: lineColor },
-                areaStyle: { opacity: 0 },
-            },
-        ],
+        series: series.map((s) => ({
+            name: s.name,
+            type: "line",
+            showSymbol: false,
+            data: s.points.map(([ts, v]) => [ts, v]),
+            lineStyle: { width: 2, color: s.color },
+            itemStyle: { color: s.color },
+            areaStyle: { opacity: 0 },
+        })),
     };
 }
 
@@ -291,26 +248,33 @@ export function mount(el, ctx) {
 
     async function refresh() {
         inst.lastCtx = ctx;
-        try {
-            const payload = await fetchRange(inst.cfg, inst.lastCtx, { signal: ac.signal });
-            const points = parsePoints(payload);
 
+        const sources = Array.isArray(inst.cfg.sources) ? inst.cfg.sources : [];
+        if (!sources.length) return;
+
+        try {
+            const title = String(inst.cfg.title || "").trim() || meta.defaults.title;
             const yMin = optionalNumber(inst.cfg.yMin);
             const yMax = optionalNumber(inst.cfg.yMax);
-            const lineColor = normalizeColor(inst.cfg.lineColor, meta.defaults.lineColor);
 
-            const title = String(inst.cfg.title || "").trim() || meta.defaults.title;
-            const seriesName = getSeriesName(inst.cfg);
+            const results = await Promise.all(
+                sources.map(async (src) => {
+                    const name = String(src?.label || "").trim() || String(src?.paramValue || "").trim() || "Series";
+                    const color = normalizeColor(src?.color, "#0d6efd");
+                    const points = await fetchSeries(src, inst.cfg, inst.lastCtx, { signal: ac.signal });
+                    return { name, color, points };
+                })
+            );
 
             inst.chart.setOption(
-                makeOption({ title, seriesName, points, yMin, yMax, lineColor }),
+                makeOption({ title, series: results, yMin, yMax }),
                 { notMerge: true }
             );
         } catch (e) {
             if (e?.name === "AbortError") return;
+            // optional: show empty/ERR state
         }
     }
-
 
     function setTimer() {
         if (inst.timer) window.clearInterval(inst.timer);
@@ -324,17 +288,22 @@ export function mount(el, ctx) {
     });
     inst.ro.observe(elChart);
 
+    const title = String(inst.cfg.title || "").trim() || meta.defaults.title;
     const yMin = optionalNumber(inst.cfg.yMin);
     const yMax = optionalNumber(inst.cfg.yMax);
-    const lineColor = normalizeColor(inst.cfg.lineColor, meta.defaults.lineColor);
 
-    const title = String(inst.cfg.title || "").trim() || meta.defaults.title;
-    const seriesName = getSeriesName(inst.cfg);
+    const sources = Array.isArray(inst.cfg.sources) ? inst.cfg.sources : [];
+    const initialSeries = sources.map((src) => ({
+        name: String(src?.label || "").trim() || String(src?.paramValue || "").trim() || "Series",
+        color: normalizeColor(src?.color),
+        points: [],
+    }));
 
     inst.chart.setOption(
-        makeOption({ title, seriesName, points: [], yMin, yMax, lineColor }),
+        makeOption({ title, series: initialSeries, yMin, yMax }),
         { notMerge: true }
     );
+
     refresh();
     setTimer();
 
