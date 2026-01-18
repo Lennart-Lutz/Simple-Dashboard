@@ -44,3 +44,25 @@
   align-items: center;
   justify-content: center;
 }
+
+/* linechart6x4 widget */
+.widget-linechart6x4 {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.linechart6x4-title {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 8px 0 8px;
+  line-height: 1.2;
+  user-select: none;
+}
+
+.linechart6x4-chart {
+  flex: 1;
+  min-height: 0; /* important for flex + echarts */
+  padding: 4px;
+}
