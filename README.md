@@ -11,7 +11,7 @@ The core goals of the project are:
 
 ## Project Overview
 
-The project consists of three major parts:
+The project consists of five major parts:
 
 ### Dashboard Core
 
