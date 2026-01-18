@@ -235,7 +235,7 @@ multiValueSource example:
   key: "sources",
   label: "Sources",
   kind: "multiValueSource",
-  maxRows: 3 // Number of possible source Ednpoints for the widget
+  maxRows: 3 // Number of possible source Endpoints for the widget (widget has to support this)
 }
 ```
 
@@ -247,7 +247,7 @@ multiSeriesSource example:
   label: "Series",
   kind: "multiSeriesSource",
   required: true,
-  maxRows: 3 // Number of possible source Ednpoints for the widget
+  maxRows: 3 // Number of possible source Endpoints for the widget (widget has to support this)
 }
 ```
 
