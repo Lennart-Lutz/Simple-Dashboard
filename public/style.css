@@ -74,3 +74,30 @@ html, body {
 .tab-edit-btn:hover {
   color: var(--text);
 }
+
+/* Range controls */
+.navbar .range-input {
+  width: 180px;
+  padding: 0.1rem 0.35rem;   
+  font-size: 0.88rem;
+  line-height: 1.2;
+}
+
+.navbar .range-custom label {
+  margin-bottom: 0;
+  line-height: 1;
+}
+
+.navbar .range-presets .btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.88rem;
+}
+
+.navbar .range-custom .btn {
+  padding: 0.25rem 0.46rem;
+  font-size: 0.85rem;
+}
+
+.navbar .text-muted.small {
+  white-space: nowrap;
+}

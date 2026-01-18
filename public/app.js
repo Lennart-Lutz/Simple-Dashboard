@@ -4,6 +4,7 @@ import { createGrid } from "./grid/grid.js";
 import { createEditTabModal } from "./ui/editTabModal.js";
 import { createAddWidgetModal } from "./ui/addWidgetModal.js";
 import { showError, showSuccess, showInfo } from "./ui/toast.js";
+import { createRangeControls } from "./ui/rangeControls.js";
 
 import { createWidgetHost } from "./widgets/host.js";
 import { listWidgetMetas, getWidget, createDefaultItem } from "./widgets/registry.js";
@@ -111,6 +112,7 @@ const editor = createEditTabModal({
         await apiPutState(state);
         tabs.render();
         renderActiveDashboard();
+        rangeControls?.render();
         showSuccess("Dashboard has been reset.");
       } catch {
         showError("Dashboard could not be reset.");
@@ -129,6 +131,7 @@ const editor = createEditTabModal({
       await apiPutState(state);
       tabs.render();
       renderActiveDashboard();
+      rangeControls?.render();
     } catch {
       showError("Dashboard could not be deleted.");
     }
@@ -163,6 +166,7 @@ const tabs = createTabsView({
     renderActiveDashboard();
     try {
       await apiPutState(state);
+      rangeControls?.render();
     } catch (e) {
       showError("Failed to switch dashboard.");
       console.error(e);
@@ -189,6 +193,7 @@ const tabs = createTabsView({
       state = await apiGetState();
       tabs.render();
       renderActiveDashboard();
+      rangeControls?.render();
     } catch (e) {
       showError("Failed to create new dashboard.");
       console.error(e);
@@ -238,12 +243,25 @@ function toggleEdit() {
 }
 
 // ---------------- Boot ----------------
+let rangeControls = null;
+
 async function boot() {
   state = await apiGetState();
+
+  rangeControls = createRangeControls({
+    getState: () => state,
+    setState: (next) => { state = next; },
+    apiPutState,
+    showError,
+    showSuccess,
+    onRangeChanged: () => syncWidgets(),
+  });
 
   tabs.render();
   renderActiveDashboard();
   grid.setEditMode(false);
+
+  rangeControls.render();
 
   elBtnEdit.addEventListener("click", toggleEdit);
   elBtnAdd.addEventListener("click", () => addWidgetModal.open());
