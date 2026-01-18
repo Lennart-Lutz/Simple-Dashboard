@@ -53,7 +53,7 @@ Supported field types include:
 - numeric ranges
 - color ranges
 - value sources
-- series sources
+- data sources
 
 ### Data Contracts
 
@@ -67,7 +67,6 @@ General rules:
 
 Widgets define their own expected response shape.
 The dashboard core does not interpret response data.
-
 
 ### Dashboard Time Ranges
 
@@ -143,7 +142,6 @@ Each widget must export:
 - mount
 - update
 - unmount
-
 
 ### Widget Configuration Fields
 
@@ -301,6 +299,8 @@ Expected endpoint response:
   ]
 }
 ```
+
+Endpoints are responsible for data resolution and sampling. Widgets only define the requested time range.
 
 ### Widget Runtime Context
 
