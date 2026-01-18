@@ -9,9 +9,10 @@ The goal is a minimalistic dashboard system with:
 - modular widget architecture (each widget = isolated module)
 
 This is NOT a framework-heavy project.
-No React/Vue.
+No React.
+No Vue.
 No LocalStorage.
-Everything is explicit, predictable and debuggable.
+Everything is explicit, predictable, and debuggable.
 
 ============================================================
 CORE FEATURES (CURRENT STATE)
@@ -31,27 +32,31 @@ CORE FEATURES (CURRENT STATE)
 - Strict persistence
   - move/add only commits AFTER successful PUT
   - rollback on error
-- Central toast system for errors / feedback
+- Central toast system for errors and feedback
 
 ============================================================
 GRID SYSTEM
 ============================================================
 
-- Custom grid engine (no gridstack / grid.js)
+- Custom grid engine (no gridstack, no grid.js)
 - Fixed cell size
-- Drag & snap movement
+- Drag and snap movement
 - Collision detection
 - Grid overlay rendered only in edit mode
-- Grid change → onChange(items) → PUT full state → commit
+- Grid change flow:
+  grid interaction
+  onChange(items)
+  PUT full dashboards state
+  commit only on success
 
 ============================================================
 WIDGET SYSTEM (IMPORTANT)
 ============================================================
 
-Each widget is a self-contained module:
+Each widget is a fully self-contained module.
 
-/public/widgets/<widgetName>/
-  └─ widget.js
+Path:
+/public/widgets/<widgetName>/widget.js
 
 Each widget exports:
 - meta
@@ -61,60 +66,180 @@ Each widget exports:
 
 Widgets are mounted via a WidgetHost that:
 - syncs widgets with grid items
-- mounts/unmounts on dashboard switch
-- updates on config changes
+- mounts and unmounts widgets on dashboard switch
+- updates widgets when config changes
 
-Widgets do their own:
+Widgets are responsible for:
 - fetch logic
-- timers
-- rendering
-- cleanup
+- timers and refresh intervals
+- rendering (DOM or ECharts)
+- cleanup (timers, observers, abort controllers)
+
+Widgets do NOT:
+- know about other widgets
+- modify global dashboard state
+- perform persistence
 
 ============================================================
 CURRENT WIDGETS
 ============================================================
 
 1) value1x1
-- Displays a single numeric value
-- Configurable:
-  - title
-  - refresh interval
-  - endpoint
-  - query param key/value
-- Polls endpoint via fetch
-- Fully isolated module
+
+Displays a single numeric value.
+
+Configuration:
+- title
+- refresh interval
+- singleValueSource (endpoint plus optional query param)
+
+Data contract:
+Request:
+GET /api/latest
+GET /api/latest?key=value
+
+Response:
+{ "value": 42 }
+
+The widget polls the endpoint periodically and renders the value as text.
+
+------------------------------------------------------------
 
 2) gauge3x3
-- ECharts gauge
-- Configurable:
-  - title
-  - min / max
-  - colored ranges (from/to/color)
-  - refresh interval
-  - endpoint + params
-- Fixed size, centered gauge
-- Custom tick/label styling
+
+Displays a numeric value using an ECharts gauge.
+
+Configuration:
+- title
+- refresh interval
+- min
+- max
+- color ranges (from / to / color)
+- singleValueSource (endpoint plus optional query param)
+
+Data contract:
+Request:
+GET /api/latest
+GET /api/latest?key=value
+
+Response:
+{ "value": 850 }
+
+The widget maps color ranges onto the gauge axis and animates the needle.
+
+------------------------------------------------------------
+
+3) linechart6x4
+
+Displays one or more time series using ECharts.
+
+Configuration:
+- title
+- refresh interval
+- fallback range (used if no dashboard range is active)
+- Y axis min and max (optional)
+- multiSeriesSource (multiple endpoints, labels, colors)
+
+Data contract:
+Request:
+GET /api/range?from_ts_ms=...&to_ts_ms=...
+GET /api/range?from_ts_ms=...&to_ts_ms=...&key=value
+
+Response:
+{
+  "points": [
+    [timestamp_ms, value],
+    [timestamp_ms, value]
+  ]
+}
+
+The widget:
+- reads the dashboard-wide time range from ctx.getDashboard().range if available
+- otherwise falls back to its local range
+- issues one request per configured series
+- renders all series into a single chart
 
 ============================================================
 ADD WIDGET MODAL
 ============================================================
 
-- Generic modal driven by widget meta
-- Widget types loaded from registry
-- Fields generated dynamically from meta.fields
-- Supported field kinds:
-  - text
-  - number
-  - select
-  - ranges (custom range editor with color picker)
-- Required field validation
-- No defaults pre-filled (user must decide)
+Widgets are configured through a generic modal dialog.
+
+The modal is entirely driven by widget meta.fields.
+No widget-specific UI code exists outside the widget definition.
+
+Supported field kinds:
+- text
+- number
+- select
+- ranges
+- colorranges
+- singleValueSource
+- multiValueSource
+- multiSeriesSource
+
+Source fields define where widgets fetch their data from.
+They are rendered as row-based editors with add and remove controls.
+The UI only allows configuring one or multiple data sources.
+The widget itself decides how these sources are used and fetched.
+
+============================================================
+SOURCE FIELD KINDS
+============================================================
+
+singleValueSource
+
+UI:
+- exactly one source entry
+
+Value passed to widget config:
+{
+  endpoint,
+  label optional,
+  paramKey optional,
+  paramValue optional
+}
+
+The widget is expected to issue exactly one request.
+
+------------------------------------------------------------
+
+multiValueSource
+
+UI:
+- multiple source entries (up to maxRows)
+
+Value passed to widget config:
+[
+  { endpoint, label optional, paramKey optional, paramValue optional },
+  ...
+]
+
+The widget decides how and when to issue requests for each source.
+
+------------------------------------------------------------
+
+multiSeriesSource
+
+UI:
+- multiple series entries (up to maxRows)
+- label required
+- color required
+
+Value passed to widget config:
+[
+  { endpoint, label, color, paramKey optional, paramValue optional },
+  ...
+]
+
+Typically used for charts, but intentionally generic enough for
+future scatter or bar plot widgets.
 
 ============================================================
 STATE MODEL
 ============================================================
 
-dashboards.json:
+dashboards.json
 
 {
   version,
@@ -126,18 +251,23 @@ dashboards.json:
       items: [
         {
           id,
-          x, y, w, h,
+          x,
+          y,
+          w,
+          h,
           type,
-          config { ...widget specific }
+          config { widget specific }
         }
       ]
     }
   ]
 }
 
-Client keeps full state in memory.
-PUT always sends full state.
-Server overwrites JSON atomically.
+Client behavior:
+- full state kept in memory
+- PUT always sends the full state
+- server overwrites JSON atomically
+- no partial updates
 
 ============================================================
 PROJECT STRUCTURE
@@ -145,40 +275,43 @@ PROJECT STRUCTURE
 
 project-root/
 ├─ server/
-│  └─ server.js                 # Express server + API + persistence
+│  └─ server.js                 Express server, API, persistence
 │
 ├─ data/
-│  └─ dashboards.json           # Persisted state
+│  └─ dashboards.json           Persisted state
 │
 ├─ public/
-│  ├─ index.html                # App shell, header, tabs, modals
-│  ├─ style.css                 # Global styles
+│  ├─ index.html                App shell, header, tabs, modals
+│  ├─ style.css                 Global styles
 │
-│  ├─ app.js                    # App orchestrator (state + wiring)
+│  ├─ app.js                    App orchestrator
 │
 │  ├─ api/
-│  │  └─ dashboardsApi.js       # REST API wrapper
+│  │  └─ dashboardsApi.js       REST API wrapper
 │
 │  ├─ state/
-│  │  └─ dashboardsState.js     # Pure state helpers
+│  │  └─ dashboardsState.js     Pure state helpers
 │
 │  ├─ grid/
-│  │  ├─ grid.js                # Custom grid engine
-│  │  └─ grid.css               # Grid + widget layout
+│  │  ├─ grid.js                Custom grid engine
+│  │  └─ grid.css               Grid and widget layout
 │
 │  ├─ widgets/
-│  │  ├─ registry.js            # Widget registry + metas
-│  │  ├─ host.js                # Widget mount/update/unmount manager
+│  │  ├─ registry.js            Widget registry and metas
+│  │  ├─ host.js                Widget mount/update/unmount manager
 │  │  ├─ value1x1/
 │  │  │  └─ widget.js
-│  │  └─ gauge3x3/
+│  │  ├─ gauge3x3/
+│  │  │  └─ widget.js
+│  │  └─ linechart6x4/
 │  │     └─ widget.js
 │
 │  └─ ui/
-│     ├─ tabsView.js            # Dashboard tabs
-│     ├─ addWidgetModal.js      # Generic widget creation modal
-│     ├─ editTabModal.js        # Rename / delete dashboard
-│     └─ toast.js               # Central toast system
+│     ├─ tabsView.js            Dashboard tabs
+│     ├─ addWidgetModal.js      Generic widget creation modal
+|     ├─ rangeControl.js        Handles the range preset buttons
+│     ├─ editTabModal.js        Rename and delete dashboards
+│     └─ toast.js               Central toast system
 │
 └─ package.json
 
@@ -190,32 +323,31 @@ DESIGN PRINCIPLES
 - No magic data flow
 - Widgets are isolated and disposable
 - Backend is dumb and reliable
-- UI logic is modular and boring (on purpose)
-- Easy to debug with DevTools
+- UI logic is modular and intentionally boring
+- Easy to debug using browser DevTools
 
 ============================================================
 TODO LIST (NEXT STEPS)
 ============================================================
 
-[ ] Delete widgets
-    - probably via widget edit modal
-    - strict delete (persist first)
+[ ] Widget deletion
+    - delete button in widget edit UI
+    - strict persistence before removal
 
-[ ] Edit widget modal
+[ ] Widget edit modal
     - reuse addWidgetModal rendering
-    - allow updating widget config
-    - include Delete button
+    - update existing widget config
+    - include delete action
 
-[ ] linechart4x4 widget
-    - ECharts line chart
-    - range-based endpoint (from/to)
-    - widget-local refresh
-    - later: dashboard-wide range
+[ ] Additional widgets
+    - bar chart
+    - scatter plot
+    - multi value grid
+    - alternative gauge variants
 
-[ ] Range buttons in header
-    - set dashboard time range (1h, 6h, 24h, 7d)
-    - propagate via widget ctx
-    - disable widget-local range where applicable
+[ ] UX polish
+    - clearer validation errors in modal
+    - improved spacing and grouping in source editors
 
 ============================================================
 END
