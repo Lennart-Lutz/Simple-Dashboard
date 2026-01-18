@@ -137,7 +137,6 @@ export function createRangeControls({
         try {
             await apiPutState(nextState);
             setState(nextState); // commit
-            showSuccess?.("Range updated.");
             onRangeChanged?.();
         } catch (e) {
             showError?.("Failed to save range. (Check connection?)");
