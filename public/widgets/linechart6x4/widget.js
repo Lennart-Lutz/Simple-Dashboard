@@ -215,10 +215,10 @@ function makeOption({ title, seriesName, points, yMin, yMax, lineColor }) {
             show: true,
             text: title,
             left: 0,
-            top: 0,
+            top: 1,
             textStyle: {
-                fontSize: 14,
-                fontWeight: 650,
+                fontSize: 16,
+                fontWeight: 400,
             },
         },
 
