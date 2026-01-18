@@ -4,7 +4,7 @@
 // - Reads dashboard-wide time range from ctx.getDashboard().range (if present)
 // - Falls no dashboard range exists: uses widget-local rangeMs
 // - Fetches timeseries from endpoint with query params:
-//   - from_ts_ms, to_ts_ms, max_points
+//   - from_ts_ms, to_ts_ms
 //   - optional paramKey/paramValue pair
 
 export const meta = {
@@ -16,7 +16,6 @@ export const meta = {
         title: "LineChart",
         refreshMs: 60000,
         rangeMs: 6 * 60 * 60 * 1000,
-        maxPoints: 400,
         yMin: "",
         yMax: "",
         sources: [], // created via modal
@@ -52,8 +51,6 @@ export const meta = {
             help: "Used when no time range is set.",
         },
 
-        { key: "maxPoints", label: "Max points", kind: "number", required: true, placeholder: "", help: "Maximum data points to display." },
-
         {
             key: "sources",
             label: "Time Series",
@@ -73,12 +70,6 @@ function normalizeRefreshMs(v, fallback) {
     const n = Number(v);
     if (!Number.isFinite(n)) return fallback;
     return Math.max(1000, Math.min(3600000, Math.round(n)));
-}
-
-function normalizeMaxPoints(v, fallback = 600) {
-    const n = Number(v);
-    if (!Number.isFinite(n)) return fallback;
-    return Math.max(10, Math.min(20000, Math.round(n)));
 }
 
 function normalizeRangeMs(v, fallback) {
@@ -130,11 +121,8 @@ function buildUrlForSource(src, cfg, ctx) {
         toTsMs = now;
     }
 
-    const maxPoints = normalizeMaxPoints(cfg?.maxPoints, meta.defaults.maxPoints);
-
     u.searchParams.set("from_ts_ms", String(fromTsMs));
     u.searchParams.set("to_ts_ms", String(toTsMs));
-    u.searchParams.set("max_points", String(maxPoints));
 
     const k = String(src?.paramKey ?? "").trim();
     const v = String(src?.paramValue ?? "").trim();
