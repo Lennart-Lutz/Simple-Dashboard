@@ -93,21 +93,7 @@ Displays a single value.
 Typical use cases:
 - sensor status values
 
-HTTP request example:
-
-```
-GET hhtp://server:port/api/latest
-GET hhtp://server:port/api/latest?key=value
-...
-```
-
-Expected endpoint response:
-
-```
-{
-  "value": 42
-}
-```
+This widget uses the **singleValueSource** API (see below)
 
 The widget periodically fetches the endpoint and displays the value as text.
 
@@ -122,21 +108,7 @@ Features:
 - animated needle
 - numeric value display
 
-HTTP request example:
-
-```
-GET hhtp://server:port/api/latest
-GET hhtp://server:port/api/latest?key=value
-...
-```
-
-Expected endpoint response:
-
-```
-{
-  "value": 850
-}
-```
+This widget uses the **singleValueSource** API (see below)
 
 Color ranges are defined relative to the configured min and max values.
 
@@ -152,24 +124,7 @@ Features:
 - dashboard wide time range support
 - widget local fallback range
 
-HTTP request example: (Time range is needed in all requests)
-
-```
-GET hhtp://server:port/api/range?from_ts_ms=...&to_ts_ms=...
-GET hhtp://server:port/api/rangefrom_ts_ms=...&to_ts_ms=...&key=value
-...
-```
-
-Expected endpoint response for each series:
-
-```
-{
-  "points": [
-    [timestamp_ms, value],
-    [timestamp_ms, value]
-  ]
-}
-```
+This widget uses the **multipleSeriesSource** API (see below)
 
 The chart automatically applies the active dashboard time range.
 If no dashboard range is set, the widget fallback range is used.
@@ -190,46 +145,211 @@ Each widget must export:
 - unmount
 
 
-### Widget API
+### Widget Configuration Fields
+
+Widgets define their configuration UI through the meta.fields array.
+Each field describes a single configurable parameter and how it is rendered in the widget configuration modal.
+The configuration UI is generated automatically.
+Widgets do not implement any widget specific configuration UI logic outside their own widget.js file.
+Each field entry consists of a key, a kind, and optional metadata such as labels, defaults, and validation rules.
+
+#### Common Field Properties
+
+All field kinds support the following common properties:
+
+- key: Unique identifier used as the configuration property name inside the widget config
+- label: Human readable label shown in the configuration modal
+- kind: Field type that defines rendering, validation, and parsing behavior
+- required: If true, the field must be filled before the widget can be added
+- help: Optional helper text shown below the field
+- helpCode: Optional code styled hint shown together with the help text
+- placeholder: Placeholder text for input fields
+
+#### Supported Standard Field Kinds
+
+- text: Simple text input. Value type: **string**
+- number: Numeric input. Value type: **number** or empty string (Widgets may treat this as automatic or fallback behavior.)
+- select: Dropdown selection. The resulting value type depends on the option value type.
+- ranges: Defines a list of numeric ranges. Each entry contains a from and to value. Value type: **object** { from: number, to: number }.
+- colorranges: Defines a list of numeric ranges with associated colors. Used for visual components such as gauges. Value type: **object** { from: number, to: number, color: string }.
+
+#### Standard Kind Examples
+
+Select example:
+
+```
+{
+  key: "refreshMs",
+  label: "Refresh Interval",
+  kind: "select",
+  required: true,
+  options: [
+    { value: 5000, label: "5s" },
+    { value: 60000, label: "1m" }
+  ]
+}
+```
+
+Ranges example:
+
+```
+{
+key: "ranges",
+label: "Ranges",
+kind: "ranges"
+}
+```
+
+Color ranges example:
+
+```
+{
+key: "ranges",
+label: "Color ranges",
+kind: "colorranges"
+}
+```
+
+#### Supported Source Field Kinds
+
+Source fields define where widgets fetch their data from. They are rendered as row based editors with add and remove controls. In the UI, source fields only allow specifying one or more data sources. The configuration itself is purely declarative. Widgets explicitly decide if, when, and how these sources are queried and how the returned data is interpreted or combined.
+
+- singleValueSource: Defines a single source that returns exactly one value. Value type: **object** { endpoint: string, label optional string, paramKey optional string, paramValue optional string }
+- multiValueSource: Defines multiple independent value sources. Value type: **array of objects** [ { endpoint: string, label: optional string, paramKey: optional string, paramValue: optional string } ]
+- multiSeriesSource: Defines multiple series sources. Value type: **array of objects** [ { endpoint: string, label: string, color: string, paramKey: optional string, paramValue: optional string } ]
+
+#### Source Kind Examples
+
+singleValueSource example:
+
+```
+{
+  key: "source",
+  label: "Source",
+  kind: "singleValueSource",
+  required: true
+}
+```
+multiValueSource example:
+
+```
+{
+  key: "sources",
+  label: "Sources",
+  kind: "multiValueSource",
+  maxRows: 3 // Number of possible source Ednpoints for the widget
+}
+```
+
+multiSeriesSource example:
+
+```
+{
+  key: "sources",
+  label: "Series",
+  kind: "multiSeriesSource",
+  required: true,
+  maxRows: 3 // Number of possible source Ednpoints for the widget
+}
+```
+
+### Source Kind HTTP Request/Response API:
+
+#### singleValueSource
+
+HTTP request example:
+
+```
+GET http://server:port/api/latest
+GET http://server:port/api/latest?key=value
+...
+```
+
+Expected endpoint response:
+
+```
+{
+  "value": 850
+}
+```
+
+#### multiValueSource
+
+Request/Response pattern the same as in the **singleValueSource**  kind.
+
+#### singleSeriesSource
+
+Not yet implemented!
+
+#### multiSeriesSource
+
+HTTP request example: (Time range is needed in all requests)
+
+```
+GET http://server:port/api/range?from_ts_ms=...&to_ts_ms=...
+GET http://server:port/api/rangefrom_ts_ms=...&to_ts_ms=...&key=value
+...
+```
+
+Expected endpoint response:
+
+```
+{
+  "points": [
+    [timestamp_ms, value],
+    [timestamp_ms, value]
+  ]
+}
+```
+
+### Widget Runtime Context
+
+Widgets run entirely in the browser and are mounted dynamically into the dashboard grid.
+Each widget instance receives a context object that provides access to runtime information such as:
+
+- the widget configuration
+- the dashboard state
+- the active dashboard time range
+
+Widgets are responsible for interpreting this context themselves.
+
+### Widget Lifecycle API
+
+Each widget must export the following functions:
 
 #### meta
 
-Describes the widget:
-- type
-- label
-- default size
+Static metadata describing the widget. Defines:
+
+- widget type identifier
+- display label
+- default grid size
 - default configuration
 - configuration fields
 
-
 #### mount
 
-Called when the widget is created.
+Called when the widget is created. Responsible for:
 
-Responsible for:
-- initial rendering
-- creating charts or DOM elements
-- starting timers
-
+- initial DOM creation
+- initializing charts or visual components
+- starting timers or data fetching
 
 #### update
 
-Called when the widget configuration changes.
+Called when the widget configuration changes. Responsible for:
 
-Responsible for:
-- applying new configuration
-- restarting timers if needed
-- re rendering if necessary
-
+- applying updated configuration
+- restarting timers if required
+- triggering re renders
 
 #### unmount
 
-Called when the widget is removed.
+Called when the widget is removed. Responsible for:
 
-Responsible for:
 - clearing timers
 - aborting fetch requests
-- cleaning up DOM or chart instances
+- cleaning up DOM elements or chart instances
 
 
 ## Status
